@@ -72,6 +72,7 @@ namespace LIFX
     public class State
     {
         public double brightness { get; set; }
+        public string color { get; set; }
         public string power { get; set; }
     }
 

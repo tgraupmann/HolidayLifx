@@ -45,7 +45,7 @@ namespace HolidayLifx
                     SetState setState = new SetState();
 
                     setState.defaults = new Defaults();
-                    setState.defaults.duration = 2.0;
+                    setState.defaults.duration = 1.0;
                     setState.defaults.power = "on";
 
                     setState.states = new List<State>();
@@ -54,16 +54,13 @@ namespace HolidayLifx
 
                     state = new State();
                     state.brightness = 1.0;
+                    state.color = "red saturation:1.0";
                     state.power = "on";
                     setState.states.Add(state);
 
                     state = new State();
-                    state.brightness = 0.5;
-                    state.power = "on";
-                    setState.states.Add(state);
-
-                    state = new State();
-                    state.brightness = 0.1;
+                    state.brightness = 1.0;
+                    state.color = "green saturation:1.0";
                     state.power = "on";
                     setState.states.Add(state);
 
@@ -77,6 +74,7 @@ namespace HolidayLifx
                         {
                             body = sr.ReadToEnd();
                         }
+                        Console.WriteLine("id: {0} cycle", light.id);
                         Console.WriteLine(body);
                     }
 
