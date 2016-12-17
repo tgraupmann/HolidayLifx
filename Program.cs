@@ -11,118 +11,158 @@ namespace HolidayLifx
 {
     class Program
     {
+        static bool _sKeepWorking = true;
         static List<Light> _sLights = new List<Light>();
-        static Dictionary<Light, string> _sOldColors = new Dictionary<Light, string>();
+        static Dictionary<Light, int> _sOldColors = new Dictionary<Light, int>();
 
         static string[] _sColors =
         {
             "white saturation:0.0",
             "green saturation:1.0",
+            "white saturation:0.0",
             "red saturation:1.0",
         };
 
-        static void GetAllLights()
+        static void GetConnectedLights()
         {
-            string url = "https://api.lifx.com/v1/lights/all";
-            HttpWebRequest request = (HttpWebRequest)HttpWebRequest.Create(url);
-            request.Headers["Authorization"] = string.Format("Bearer {0}", Authentication.TOKEN);
-            HttpWebResponse response = (HttpWebResponse)request.GetResponse();
-            Stream stream = response.GetResponseStream();
-            DataContractJsonSerializer ser = new DataContractJsonSerializer(typeof(Light[]));
-            Light[] lights = (Light[])ser.ReadObject(stream);
-            foreach (Light light in lights)
+            try
             {
-                Console.WriteLine("Found: {0} Connected={1}", light.id, light.connected);
-                if (light.connected)
+                string url = "https://api.lifx.com/v1/lights/all";
+                HttpWebRequest request = (HttpWebRequest)HttpWebRequest.Create(url);
+                request.Headers["Authorization"] = string.Format("Bearer {0}", Authentication.TOKEN);
+                HttpWebResponse response = (HttpWebResponse)request.GetResponse();
+                Stream stream = response.GetResponseStream();
+                DataContractJsonSerializer ser = new DataContractJsonSerializer(typeof(Light[]));
+                Light[] lights = (Light[])ser.ReadObject(stream);
+                foreach (Light light in lights)
                 {
-                    _sLights.Add(light);
-                    _sOldColors[light] = _sColors[0];
+                    Console.WriteLine("id={0} Connected={1}", light.id, light.connected);
+                    if (light.connected)
+                    {
+                        _sLights.Add(light);
+                        _sOldColors[light] = 0;
+                    }
                 }
+            }
+            catch (WebException ex)
+            {
+                if (ex.Status == WebExceptionStatus.ProtocolError && ex.Response != null)
+                {
+                    var resp = (HttpWebResponse)ex.Response;
+                    Console.Error.WriteLine("[ERROR] Failed to get connected lights status={0}", resp.StatusCode);
+                }
+                else
+                {
+                    Console.Error.WriteLine("[ERROR] Failed to get connected lights");
+                }
+            }
+        }
+
+        static void DoCycle(Light light)
+        {
+            DataContractJsonSerializer dataContractJsonSerializer =
+                    new DataContractJsonSerializer(typeof(CycleInput));
+
+            int oldColor = _sOldColors[light];
+            int newColor = (oldColor + 1) % _sColors.Length;
+            _sOldColors[light] = newColor;
+
+            #region Cycle
+
+            CycleInput cycleInput = new CycleInput();
+
+            cycleInput.defaults = new Defaults();
+            cycleInput.defaults.duration = 2;
+            cycleInput.defaults.power = "on";
+
+            cycleInput.states = new List<State>();
+
+            State state;
+
+            state = new State();
+            state.brightness = 1.0;
+            state.color = string.Format("{0}", _sColors[oldColor]);
+            state.power = "on";
+            cycleInput.states.Add(state);
+
+            state = new State();
+            state.brightness = 1.0;
+            state.color = string.Format("{0}", _sColors[newColor]);
+            state.power = "on";
+            cycleInput.states.Add(state);
+
+            string body = "";
+            using (MemoryStream ms = new MemoryStream())
+            {
+                dataContractJsonSerializer.WriteObject(ms, cycleInput);
+                ms.Flush();
+                ms.Position = 0;
+                using (StreamReader sr = new StreamReader(ms))
+                {
+                    body = sr.ReadToEnd();
+                }
+                //Console.WriteLine("id={0} cycle", light.id);
+                //Console.WriteLine("id={0} body={1}", light.id, body);
+            }
+
+            using (WebClient client = new WebClient())
+            {
+                client.Headers.Add("Authorization", string.Format("Bearer {0}", Authentication.TOKEN));
+                client.Headers[HttpRequestHeader.ContentType] = "application/json";
+                string url = string.Format("https://api.lifx.com/v1/lights/id:{0}/cycle", light.id);
+                try
+                {
+                    string responseData = client.UploadString(url, "POST", body);
+
+                    // Decode and display the response.
+                    //Console.WriteLine("id={0} Response={1}", light.id, responseData);
+                }
+                catch (WebException ex)
+                {
+                    if (ex.Status == WebExceptionStatus.ProtocolError && ex.Response != null)
+                    {
+                        var resp = (HttpWebResponse)ex.Response;
+                        Console.Error.WriteLine("[ERROR] id={0} Failed to cycle status={1}", light.id, resp.StatusCode);
+                    }
+                    else
+                    {
+                        Console.Error.WriteLine("[ERROR] id={0} Failed to cycle", light.id);
+                    }
+                }
+            }
+
+            #endregion
+        }
+
+        static void CycleWorker(Object threadObject)
+        {
+            Light light = threadObject as Light;
+            while (_sKeepWorking)
+            {
+                DoCycle(light);
+                Thread.Sleep(1000);
             }
         }
 
         static void Main(string[] args)
         {
-            GetAllLights();
-
-            Random random = new Random();
-            while (true)
+            new Thread(new ThreadStart(() =>
             {
-                DataContractJsonSerializer serSetState = new DataContractJsonSerializer(typeof(SetState));
+                GetConnectedLights();
 
                 foreach (Light light in _sLights)
                 {
-                    string oldColor = _sOldColors[light];
-                    string newColor = _sColors[random.Next() % _sColors.Length];
-                    _sOldColors[light] = newColor;
-
-                    SetState setState = new SetState();
-
-                    setState.defaults = new Defaults();
-                    setState.defaults.duration = 2.0;
-                    setState.defaults.power = "on";
-
-                    setState.states = new List<State>();
-
-                    State state;
-
-                    state = new State();
-                    state.brightness = 1.0;
-                    state.color = string.Format("{0}", oldColor);
-                    state.power = "on";
-                    setState.states.Add(state);
-
-                    state = new State();
-                    state.brightness = 1.0;
-                    state.color = string.Format("{0}", newColor);
-                    state.power = "on";
-                    setState.states.Add(state);
-
-                    string body = "";
-                    using (MemoryStream ms = new MemoryStream())
-                    {
-                        serSetState.WriteObject(ms, setState);
-                        ms.Flush();
-                        ms.Position = 0;
-                        using (StreamReader sr = new StreamReader(ms))
-                        {
-                            body = sr.ReadToEnd();
-                        }
-                        Console.WriteLine("id: {0} cycle", light.id);
-                        Console.WriteLine(body);
-                    }
-
-
-                    using (WebClient client = new WebClient())
-                    {
-                        client.Headers.Add("Authorization", string.Format("Bearer {0}", Authentication.TOKEN));
-                        client.Headers[HttpRequestHeader.ContentType] = "application/json";
-                        string url = string.Format("https://api.lifx.com/v1/lights/id:{0}/cycle", light.id);
-                        try
-                        {
-                            string responseData = client.UploadString(url, "POST", body);
-
-                            // Decode and display the response.
-                            Console.WriteLine("id: {0} Response={1}", light.id, responseData);
-                        }
-                        catch (WebException ex)
-                        {
-                            if (ex.Status == WebExceptionStatus.ProtocolError && ex.Response != null)
-                            {
-                                var resp = (HttpWebResponse)ex.Response;
-                                Console.Error.WriteLine("Failed to cycle id={0} status={1}", light.id, resp.StatusCode);
-                            }
-                            else
-                            {
-                                Console.Error.WriteLine("Failed to cycle id={0}", light.id);
-                            }
-                        }
-                    }
+                    ParameterizedThreadStart ts = new ParameterizedThreadStart(CycleWorker);
+                    Thread thread = new Thread(ts);
+                    thread.Start(light);
                 }
+            })).Start();
 
-                Thread.Sleep(5000);
-            }
+            Console.WriteLine("Press a key to exit.");
+            Console.ReadKey();
 
+            Console.WriteLine("Key found exiting...");
+            _sKeepWorking = false;
         }
 
         private static void PrintStream(Stream stream)

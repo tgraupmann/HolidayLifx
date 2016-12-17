@@ -83,7 +83,7 @@ namespace LIFX
     }
 
     [DataContract]
-    public class SetState
+    public class CycleInput
     {
         [DataMember]
         public List<State> states { get; set; }
