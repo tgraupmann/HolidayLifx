@@ -43,10 +43,11 @@ namespace HolidayLifx
                 foreach (Light light in _sLights)
                 {
                     SetState setState = new SetState();
+
                     setState.defaults = new Defaults();
                     setState.defaults.duration = 2.0;
                     setState.defaults.power = "on";
-                    setState.defaults.saturation = 0;
+
                     setState.states = new List<State>();
 
                     State state;
@@ -71,18 +72,40 @@ namespace HolidayLifx
                     {
                         serSetState.WriteObject(ms, setState);
                         ms.Flush();
-                        byte[] data = ms.GetBuffer();
-                        body = System.Text.ASCIIEncoding.ASCII.GetString(data);
+                        ms.Position = 0;
+                        using (StreamReader sr = new StreamReader(ms))
+                        {
+                            body = sr.ReadToEnd();
+                        }
                         Console.WriteLine(body);
                     }
 
 
-                    WebClient client = new WebClient();
-                    client.Headers.Add("Authorization", string.Format("Bearer {0}", Authentication.TOKEN));
-                    client.Headers.Add("Accept", "*/*");
-                    client.Headers.Add("accept-encoding", "gzip, deflate");
-                    string url = string.Format("https://api.lifx.com/v1/lights/id:{0}/cycle", light.id);
-                    client.UploadData(url, "POST", System.Text.Encoding.ASCII.GetBytes(body));
+                    using (WebClient client = new WebClient())
+                    {
+                        client.Headers.Add("Authorization", string.Format("Bearer {0}", Authentication.TOKEN));
+                        client.Headers[HttpRequestHeader.ContentType] = "application/json";
+                        string url = string.Format("https://api.lifx.com/v1/lights/id:{0}/cycle", light.id);
+                        try
+                        {
+                            string responseData = client.UploadString(url, "POST", body);
+
+                            // Decode and display the response.
+                            Console.WriteLine("id: {0} Response={1}", light.id, responseData);
+                        }
+                        catch (WebException ex)
+                        {
+                            if (ex.Status == WebExceptionStatus.ProtocolError && ex.Response != null)
+                            {
+                                var resp = (HttpWebResponse)ex.Response;
+                                Console.Error.WriteLine("Failed to cycle id={0} status={1}", light.id, resp.StatusCode);
+                            }
+                            else
+                            {
+                                Console.Error.WriteLine("Failed to cycle id={0}", light.id);
+                            }
+                        }
+                    }
 
                     Thread.Sleep(1000);
                 }

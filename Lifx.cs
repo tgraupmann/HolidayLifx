@@ -78,7 +78,6 @@ namespace LIFX
     public class Defaults
     {
         public string power { get; set; }
-        public int saturation { get; set; }
         public double duration { get; set; }
     }
 
