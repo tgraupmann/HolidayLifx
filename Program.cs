@@ -2,7 +2,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Runtime.Serialization;
 using System.Net;
 using System.Threading;
 using System.Runtime.Serialization.Json;
@@ -134,14 +133,82 @@ namespace HolidayLifx
             #endregion
         }
 
+        static void DoSet(Light light)
+        {
+            DataContractJsonSerializer dataContractJsonSerializer =
+                    new DataContractJsonSerializer(typeof(SetInput));
+
+            int oldColor = _sOldColors[light];
+            int newColor = (oldColor + 1) % _sColors.Length;
+            _sOldColors[light] = newColor;
+
+            #region Set
+
+            SetInput setInput = new SetInput();
+
+            setInput.power = "on";
+            setInput.color = _sColors[newColor];
+            setInput.brightness = 1.0;
+            setInput.duration = 0;
+
+            string body = "";
+            using (MemoryStream ms = new MemoryStream())
+            {
+                dataContractJsonSerializer.WriteObject(ms, setInput);
+                ms.Flush();
+                ms.Position = 0;
+                using (StreamReader sr = new StreamReader(ms))
+                {
+                    body = sr.ReadToEnd();
+                }
+                //Console.WriteLine("id={0} cycle", light.id);
+                //Console.WriteLine("id={0} body={1}", light.id, body);
+            }
+
+            using (WebClient client = new WebClient())
+            {
+                client.Headers.Add("Authorization", string.Format("Bearer {0}", Authentication.TOKEN));
+                client.Headers[HttpRequestHeader.ContentType] = "application/json";
+                string url = string.Format("https://api.lifx.com/v1/lights/id:{0}/state", light.id);
+                try
+                {
+                    string responseData = client.UploadString(url, "PUT", body);
+
+                    // Decode and display the response.
+                    //Console.WriteLine("id={0} Response={1}", light.id, responseData);
+                }
+                catch (WebException ex)
+                {
+                    if (ex.Status == WebExceptionStatus.ProtocolError && ex.Response != null)
+                    {
+                        var resp = (HttpWebResponse)ex.Response;
+                        Console.Error.WriteLine("[ERROR] id={0} Failed to cycle status={1}", light.id, resp.StatusCode);
+                    }
+                    else
+                    {
+                        Console.Error.WriteLine("[ERROR] id={0} Failed to cycle", light.id);
+                    }
+                }
+            }
+
+            #endregion
+        }
+
         static void CycleWorker(Object threadObject)
         {
+            Random random = new Random();
             Light light = threadObject as Light;
             while (_sKeepWorking)
             {
-                DoCycle(light);
-                Thread.Sleep(1000);
+                //DoCycle(light);
+                //Thread.Sleep(1000);
+
+                DoSet(light);
+                Thread.Sleep(1000+random.Next()%100);
             }
+
+            _sOldColors[light] = _sOldColors.Count - 1;
+            DoSet(light);
         }
 
         static void Main(string[] args)

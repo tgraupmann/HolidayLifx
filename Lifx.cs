@@ -90,4 +90,17 @@ namespace LIFX
         [DataMember]
         public Defaults defaults { get; set; }
     }
+
+    [DataContract]
+    public class SetInput
+    {
+        [DataMember]
+        public string power { get; set; }
+        [DataMember]
+        public string color { get; set; }
+        [DataMember]
+        public double brightness { get; set; }
+        [DataMember]
+        public double duration { get; set; }
+    }
 }
