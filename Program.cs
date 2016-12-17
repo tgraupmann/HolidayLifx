@@ -12,6 +12,14 @@ namespace HolidayLifx
     class Program
     {
         static List<Light> _sLights = new List<Light>();
+        static Dictionary<Light, string> _sOldColors = new Dictionary<Light, string>();
+
+        static string[] _sColors =
+        {
+            "white saturation:0.0",
+            "green saturation:1.0",
+            "red saturation:1.0",
+        };
 
         static void GetAllLights()
         {
@@ -28,24 +36,30 @@ namespace HolidayLifx
                 if (light.connected)
                 {
                     _sLights.Add(light);
+                    _sOldColors[light] = _sColors[0];
                 }
             }
         }
 
         static void Main(string[] args)
         {
-            if (true)
-            {
-                GetAllLights();
+            GetAllLights();
 
+            Random random = new Random();
+            while (true)
+            {
                 DataContractJsonSerializer serSetState = new DataContractJsonSerializer(typeof(SetState));
 
                 foreach (Light light in _sLights)
                 {
+                    string oldColor = _sOldColors[light];
+                    string newColor = _sColors[random.Next() % _sColors.Length];
+                    _sOldColors[light] = newColor;
+
                     SetState setState = new SetState();
 
                     setState.defaults = new Defaults();
-                    setState.defaults.duration = 1.0;
+                    setState.defaults.duration = 2.0;
                     setState.defaults.power = "on";
 
                     setState.states = new List<State>();
@@ -54,13 +68,13 @@ namespace HolidayLifx
 
                     state = new State();
                     state.brightness = 1.0;
-                    state.color = "red saturation:1.0";
+                    state.color = string.Format("{0}", oldColor);
                     state.power = "on";
                     setState.states.Add(state);
 
                     state = new State();
                     state.brightness = 1.0;
-                    state.color = "green saturation:1.0";
+                    state.color = string.Format("{0}", newColor);
                     state.power = "on";
                     setState.states.Add(state);
 
@@ -104,9 +118,9 @@ namespace HolidayLifx
                             }
                         }
                     }
-
-                    Thread.Sleep(1000);
                 }
+
+                Thread.Sleep(5000);
             }
 
         }
