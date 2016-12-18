@@ -204,11 +204,13 @@ namespace HolidayLifx
                 //Thread.Sleep(1000);
 
                 DoSet(light);
-                Thread.Sleep(1000+random.Next()%100);
+                Thread.Sleep(1000+random.Next()%1000);
             }
 
             _sOldColors[light] = _sOldColors.Count - 1;
             DoSet(light);
+            DoSet(light);
+            Console.WriteLine("id={0} set to white", light.id);
         }
 
         static void Main(string[] args)
